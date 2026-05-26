@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
 import {
   ArrowRight, Cpu, Globe, DollarSign, Wind, Sun, Layers, Users, Shield,
-  Star, Zap, Box, Map, ChevronRight, Play, Check, Sparkles
+  Star, Zap, Box, Map, ChevronRight, Play, Check, Sparkles, Menu, X as XIcon
 } from 'lucide-react';
+import FeaturesPage from './FeaturesPage';
+import TemplatesPage from './TemplatesPage';
+import PricingPage from './PricingPage';
+import EnterprisePage from './EnterprisePage';
 
 const FEATURES = [
   {
@@ -141,43 +145,126 @@ function AnimatedCounter({ target, suffix = '' }) {
   return <span>{count}</span>;
 }
 
+const NAV_PAGES = ['Features', 'Templates', 'Pricing', 'Enterprise'];
+
+function Navbar({ activePage, onNav, onStart }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  return (
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-void/85 backdrop-blur-xl border-b border-border/50">
+      <div className="flex items-center justify-between px-8 py-4">
+        {/* Logo */}
+        <button onClick={() => onNav(null)} className="flex items-center gap-3 group">
+          <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-indigo-500/40 transition-all glow-indigo">
+            <Box className="w-5 h-5 text-white" />
+          </div>
+          <span className="text-xl font-black text-white tracking-tight">ARCH<span className="text-gradient">CRAFT</span></span>
+        </button>
+
+        {/* Desktop nav */}
+        <div className="hidden md:flex items-center gap-1">
+          {NAV_PAGES.map(item => (
+            <button key={item} onClick={() => onNav(item)}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activePage === item
+                  ? 'text-white bg-indigo-500/15 border border-indigo-500/30'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}>
+              {item}
+            </button>
+          ))}
+        </div>
+
+        {/* Right actions */}
+        <div className="flex items-center gap-3">
+          <button className="hidden sm:block text-sm text-slate-400 hover:text-white transition-colors font-medium px-4 py-2">Sign In</button>
+          <button onClick={onStart}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-cyan-500 text-white text-sm font-bold rounded-xl shadow-lg hover:shadow-indigo-500/40 transition-all hover:-translate-y-0.5">
+            Launch Studio
+            <ArrowRight className="w-4 h-4" />
+          </button>
+          {/* Mobile menu toggle */}
+          <button className="md:hidden w-9 h-9 flex items-center justify-center rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-all"
+            onClick={() => setMobileOpen(!mobileOpen)}>
+            {mobileOpen ? <XIcon className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile dropdown */}
+      {mobileOpen && (
+        <div className="md:hidden border-t border-border bg-void/95 px-4 py-3 space-y-1">
+          <button onClick={() => { onNav(null); setMobileOpen(false); }}
+            className="w-full text-left px-4 py-2.5 text-sm text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-all">
+            Home
+          </button>
+          {NAV_PAGES.map(item => (
+            <button key={item} onClick={() => { onNav(item); setMobileOpen(false); }}
+              className={`w-full text-left px-4 py-2.5 text-sm font-medium rounded-lg transition-all ${
+                activePage === item ? 'text-white bg-indigo-500/15' : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}>
+              {item}
+            </button>
+          ))}
+        </div>
+      )}
+    </nav>
+  );
+}
+
 export default function Landing({ onStart }) {
   const [hovered, setHovered] = useState(null);
   const [started, setStarted] = useState(false);
+  const [activePage, setActivePage] = useState(null); // null = home
 
   const handleStart = () => {
     setStarted(true);
     setTimeout(() => onStart(), 400);
   };
 
+  const handleNav = (page) => {
+    setActivePage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Render sub-pages
+  if (activePage === 'Features') {
+    return (
+      <>
+        <Navbar activePage={activePage} onNav={handleNav} onStart={handleStart} />
+        <FeaturesPage onStart={handleStart} />
+      </>
+    );
+  }
+  if (activePage === 'Templates') {
+    return (
+      <>
+        <Navbar activePage={activePage} onNav={handleNav} onStart={handleStart} />
+        <TemplatesPage onStart={handleStart} />
+      </>
+    );
+  }
+  if (activePage === 'Pricing') {
+    return (
+      <>
+        <Navbar activePage={activePage} onNav={handleNav} onStart={handleStart} />
+        <PricingPage onStart={handleStart} />
+      </>
+    );
+  }
+  if (activePage === 'Enterprise') {
+    return (
+      <>
+        <Navbar activePage={activePage} onNav={handleNav} onStart={handleStart} />
+        <EnterprisePage onStart={handleStart} />
+      </>
+    );
+  }
+
   return (
     <div className={`min-h-screen bg-void overflow-auto transition-opacity duration-400 ${started ? 'opacity-0' : 'opacity-100'}`}>
       {/* Nav */}
-      <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-4 bg-void/80 backdrop-blur-xl border-b border-border/50">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg glow-indigo">
-            <Box className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-xl font-black text-white tracking-tight">ARCH<span className="text-gradient">CRAFT</span></span>
-        </div>
-
-        <div className="hidden md:flex items-center gap-8">
-          {['Features', 'Templates', 'Pricing', 'Enterprise'].map(item => (
-            <a key={item} href="#" className="text-sm text-slate-400 hover:text-white transition-colors font-medium">{item}</a>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button className="text-sm text-slate-400 hover:text-white transition-colors font-medium px-4 py-2">Sign In</button>
-          <button
-            onClick={handleStart}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-cyan-500 text-white text-sm font-bold rounded-xl shadow-lg hover:shadow-indigo-500/40 transition-all hover:-translate-y-0.5"
-          >
-            Launch Studio
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-      </nav>
+      <Navbar activePage={activePage} onNav={handleNav} onStart={handleStart} />
 
       {/* Hero */}
       <section className="relative pt-32 pb-24 px-8 overflow-hidden noise">
