@@ -118,8 +118,8 @@ const useDesignStore = create((set, get) => ({
   selectedId: null,
   selectedType: null,
 
-  history: [],
-  historyIndex: -1,
+  _past: [],   // snapshots for undo
+  _future: [], // snapshots for redo
 
   // Computed
   get totalArea() {
@@ -132,6 +132,50 @@ const useDesignStore = create((set, get) => ({
 
   get structuralScore() {
     return calcStructuralScore(get().rooms);
+  },
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  _snapshot: () => {
+    const s = get();
+    return { rooms: s.rooms, furniture: s.furniture };
+  },
+
+  _pushHistory: () => {
+    const snap = get()._snapshot();
+    set(s => ({
+      _past: [...s._past.slice(-40), snap], // keep last 40
+      _future: [],
+    }));
+  },
+
+  undo: () => {
+    const { _past, _future, _snapshot } = get();
+    if (_past.length === 0) return;
+    const current = _snapshot();
+    const prev = _past[_past.length - 1];
+    set({
+      rooms: prev.rooms,
+      furniture: prev.furniture,
+      _past: _past.slice(0, -1),
+      _future: [current, ..._future.slice(0, 39)],
+      selectedId: null,
+      selectedType: null,
+    });
+  },
+
+  redo: () => {
+    const { _past, _future, _snapshot } = get();
+    if (_future.length === 0) return;
+    const current = _snapshot();
+    const next = _future[0];
+    set({
+      rooms: next.rooms,
+      furniture: next.furniture,
+      _past: [..._past.slice(-39), current],
+      _future: _future.slice(1),
+      selectedId: null,
+      selectedType: null,
+    });
   },
 
   setProjectName: (name) => set({ projectName: name }),
@@ -148,6 +192,7 @@ const useDesignStore = create((set, get) => ({
   clearSelection: () => set({ selectedId: null, selectedType: null }),
 
   addRoom: (roomData) => {
+    get()._pushHistory();
     const room = {
       id: generateId(),
       name: roomData.name || 'New Room',
@@ -178,6 +223,7 @@ const useDesignStore = create((set, get) => ({
   },
 
   deleteRoom: (id) => {
+    get()._pushHistory();
     set(s => ({
       rooms: s.rooms.filter(r => r.id !== id),
       selectedId: s.selectedId === id ? null : s.selectedId,
@@ -185,6 +231,7 @@ const useDesignStore = create((set, get) => ({
   },
 
   addFurniture: (data) => {
+    get()._pushHistory();
     const item = {
       id: generateId(),
       type: data.type || 'chair',
@@ -207,6 +254,7 @@ const useDesignStore = create((set, get) => ({
   },
 
   deleteFurniture: (id) => {
+    get()._pushHistory();
     set(s => ({
       furniture: s.furniture.filter(f => f.id !== id),
       selectedId: s.selectedId === id ? null : s.selectedId,
@@ -214,6 +262,7 @@ const useDesignStore = create((set, get) => ({
   },
 
   addDoor: (roomId, face, pos = 0.5) => {
+    get()._pushHistory();
     set(s => ({
       rooms: s.rooms.map(r => {
         if (r.id !== roomId) return r;
@@ -224,6 +273,7 @@ const useDesignStore = create((set, get) => ({
   },
 
   removeDoor: (roomId, face) => {
+    get()._pushHistory();
     set(s => ({
       rooms: s.rooms.map(r =>
         r.id !== roomId ? r : { ...r, doors: (r.doors || []).filter(d => d.wall !== face) }
@@ -232,6 +282,7 @@ const useDesignStore = create((set, get) => ({
   },
 
   addWindow: (roomId, face, pos = 0.5) => {
+    get()._pushHistory();
     set(s => ({
       rooms: s.rooms.map(r => {
         if (r.id !== roomId) return r;
@@ -242,6 +293,7 @@ const useDesignStore = create((set, get) => ({
   },
 
   removeWindow: (roomId, face) => {
+    get()._pushHistory();
     set(s => ({
       rooms: s.rooms.map(r =>
         r.id !== roomId ? r : { ...r, windows: (r.windows || []).filter(w => w.wall !== face) }
@@ -249,16 +301,20 @@ const useDesignStore = create((set, get) => ({
     }));
   },
 
-  clearAll: () => set({
-    rooms: [],
-    furniture: [],
-    doors: [],
-    windows: [],
-    selectedId: null,
-    selectedType: null,
-  }),
+  clearAll: () => {
+    get()._pushHistory();
+    set({
+      rooms: [],
+      furniture: [],
+      doors: [],
+      windows: [],
+      selectedId: null,
+      selectedType: null,
+    });
+  },
 
   duplicateRoom: (id) => {
+    get()._pushHistory();
     const room = get().rooms.find(r => r.id === id);
     if (!room) return;
     const copy = { ...room, id: generateId(), x: room.x + 1, z: room.z + 1, name: room.name + ' Copy' };
@@ -266,6 +322,7 @@ const useDesignStore = create((set, get) => ({
   },
 
   loadTemplate: (template) => {
+    get()._pushHistory();
     set({
       rooms: template.rooms.map(r => ({ ...r, id: generateId(), doors: r.doors || [], windows: r.windows || [] })),
       furniture: template.furniture?.map(f => ({ ...f, id: generateId() })) ?? [],

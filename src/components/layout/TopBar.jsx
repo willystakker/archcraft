@@ -51,7 +51,7 @@ function StatusBadge({ score }) {
 }
 
 export default function TopBar({ onNavigateHome }) {
-  const { projectName, setProjectName, rooms } = useDesignStore();
+  const { projectName, setProjectName, rooms, undo, redo, _past, _future } = useDesignStore();
   const {
     showGrid, toggleGrid, showShadows, toggleShadows, showWireframe, toggleWireframe,
     toggleAI, toggleCost, toggleClimate, toggleSolar, toggleExport, toggleLocation, toggleTemplates,
@@ -114,10 +114,28 @@ export default function TopBar({ onNavigateHome }) {
 
       {/* Undo/Redo */}
       <div className="flex items-center gap-1">
-        <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-slate-400 hover:text-white transition-all" title="Undo">
+        <button
+          onClick={undo}
+          disabled={!_past?.length}
+          className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${
+            _past?.length
+              ? 'hover:bg-muted text-slate-400 hover:text-white'
+              : 'text-slate-700 cursor-not-allowed'
+          }`}
+          title={`Undo${_past?.length ? ` (${_past.length})` : ''} — Ctrl+Z`}
+        >
           <Undo2 className="w-4 h-4" />
         </button>
-        <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-slate-400 hover:text-white transition-all" title="Redo">
+        <button
+          onClick={redo}
+          disabled={!_future?.length}
+          className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${
+            _future?.length
+              ? 'hover:bg-muted text-slate-400 hover:text-white'
+              : 'text-slate-700 cursor-not-allowed'
+          }`}
+          title={`Redo${_future?.length ? ` (${_future.length})` : ''} — Ctrl+Y`}
+        >
           <Redo2 className="w-4 h-4" />
         </button>
       </div>
