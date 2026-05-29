@@ -44,14 +44,28 @@ export default function FloorPlan2D() {
   const canvasRef = useRef();
   const svgRef = useRef();
   const { rooms, furniture, selectedId, setSelected, clearSelection, updateRoom } = useDesignStore();
-  const { activeTool, showGrid, showMeasurements, showFurniture, isDrawingRoom, drawStart, drawCurrent, startDrawing, updateDrawing, endDrawing, addRoom } = useUIStore();
+  const { activeTool, showGrid, showMeasurements, showFurniture, isDrawingRoom, drawStart, drawCurrent, startDrawing, updateDrawing, endDrawing, addRoom, canvasZoom, setCanvasZoom } = useUIStore();
 
   const [dragging, setDragging] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, z: 0 });
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState(null);
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoomLocal] = useState(canvasZoom ?? 1);
+  // Sync external zoom (from BottomBar) → local zoom without causing loop
+  const extZoomRef = useRef(canvasZoom ?? 1);
+  const setZoom = useCallback((val) => {
+    const v = typeof val === 'function' ? val(extZoomRef.current) : val;
+    extZoomRef.current = v;
+    setZoomLocal(v);
+    setCanvasZoom(v);
+  }, [setCanvasZoom]);
+  useEffect(() => {
+    if (canvasZoom !== extZoomRef.current) {
+      extZoomRef.current = canvasZoom;
+      setZoomLocal(canvasZoom);
+    }
+  }, [canvasZoom]);
   const [svgDraw, setSvgDraw] = useState(null);
   const [centered, setCentered] = useState(false);
 

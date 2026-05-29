@@ -147,7 +147,7 @@ function AnimatedCounter({ target, suffix = '' }) {
 
 const NAV_PAGES = ['Features', 'Templates', 'Pricing', 'Enterprise'];
 
-function Navbar({ activePage, onNav, onStart }) {
+function Navbar({ activePage, onNav, onStart, onSignIn }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
@@ -177,7 +177,7 @@ function Navbar({ activePage, onNav, onStart }) {
 
         {/* Right actions */}
         <div className="flex items-center gap-3">
-          <button className="hidden sm:block text-sm text-slate-400 hover:text-white transition-colors font-medium px-4 py-2">Sign In</button>
+          <button onClick={onSignIn} className="hidden sm:block text-sm text-slate-400 hover:text-white transition-colors font-medium px-4 py-2">Sign In</button>
           <button onClick={onStart}
             className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-cyan-500 text-white text-sm font-bold rounded-xl shadow-lg hover:shadow-indigo-500/40 transition-all hover:-translate-y-0.5">
             Launch Studio
@@ -212,7 +212,7 @@ function Navbar({ activePage, onNav, onStart }) {
   );
 }
 
-export default function Landing({ onStart }) {
+export default function Landing({ onStart, onSignIn }) {
   const [hovered, setHovered] = useState(null);
   const [started, setStarted] = useState(false);
   const [activePage, setActivePage] = useState(null); // null = home
@@ -231,7 +231,7 @@ export default function Landing({ onStart }) {
   if (activePage === 'Features') {
     return (
       <>
-        <Navbar activePage={activePage} onNav={handleNav} onStart={handleStart} />
+        <Navbar activePage={activePage} onNav={handleNav} onStart={handleStart} onSignIn={onSignIn} />
         <FeaturesPage onStart={handleStart} />
       </>
     );
@@ -239,7 +239,7 @@ export default function Landing({ onStart }) {
   if (activePage === 'Templates') {
     return (
       <>
-        <Navbar activePage={activePage} onNav={handleNav} onStart={handleStart} />
+        <Navbar activePage={activePage} onNav={handleNav} onStart={handleStart} onSignIn={onSignIn} />
         <TemplatesPage onStart={handleStart} />
       </>
     );
@@ -247,7 +247,7 @@ export default function Landing({ onStart }) {
   if (activePage === 'Pricing') {
     return (
       <>
-        <Navbar activePage={activePage} onNav={handleNav} onStart={handleStart} />
+        <Navbar activePage={activePage} onNav={handleNav} onStart={handleStart} onSignIn={onSignIn} />
         <PricingPage onStart={handleStart} />
       </>
     );
@@ -255,7 +255,7 @@ export default function Landing({ onStart }) {
   if (activePage === 'Enterprise') {
     return (
       <>
-        <Navbar activePage={activePage} onNav={handleNav} onStart={handleStart} />
+        <Navbar activePage={activePage} onNav={handleNav} onStart={handleStart} onSignIn={onSignIn} />
         <EnterprisePage onStart={handleStart} />
       </>
     );
@@ -264,7 +264,7 @@ export default function Landing({ onStart }) {
   return (
     <div className={`min-h-screen bg-void overflow-auto transition-opacity duration-400 ${started ? 'opacity-0' : 'opacity-100'}`}>
       {/* Nav */}
-      <Navbar activePage={activePage} onNav={handleNav} onStart={handleStart} />
+      <Navbar activePage={activePage} onNav={handleNav} onStart={handleStart} onSignIn={onSignIn} />
 
       {/* Hero */}
       <section className="relative pt-32 pb-24 px-8 overflow-hidden noise">

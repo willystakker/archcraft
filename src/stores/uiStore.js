@@ -23,6 +23,7 @@ const useUIStore = create((set) => ({
   cameraAngle: 'perspective',
   sunAngle: 45,
   sunTime: 12,
+  canvasZoom: 1,
 
   isDrawingRoom: false,
   drawStart: null,
@@ -50,6 +51,7 @@ const useUIStore = create((set) => ({
   setSunAngle: (a) => set({ sunAngle: a }),
   setSunTime: (t) => set({ sunTime: t }),
   setCameraAngle: (a) => set({ cameraAngle: a }),
+  setCanvasZoom: (z) => set({ canvasZoom: z }),
 
   startDrawing: (point) => set({ isDrawingRoom: true, drawStart: point, drawCurrent: point }),
   updateDrawing: (point) => set({ drawCurrent: point }),

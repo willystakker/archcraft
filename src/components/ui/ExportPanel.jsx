@@ -57,9 +57,14 @@ const EXPORT_OPTIONS = [
   },
 ];
 
-function generateShareLink(projectName) {
-  const hash = btoa(projectName + Date.now()).replace(/[+/=]/g, '').slice(0, 14);
-  return `https://archcraft.io/view/${hash}`;
+function generateShareLink(rooms, furniture, projectName, materialTier) {
+  try {
+    const data = { v: '1', n: projectName, r: rooms, f: furniture, m: materialTier };
+    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+    return `${window.location.origin}/?p=${encoded}`;
+  } catch {
+    return window.location.origin;
+  }
 }
 
 export default function ExportPanel() {
@@ -100,10 +105,12 @@ export default function ExportPanel() {
         useUIStore.getState().notify('Project saved!', 'success');
 
       } else if (id === 'share-link') {
-        await new Promise(r => setTimeout(r, 600));
-        setShareLink(generateShareLink(projectName));
+        await new Promise(r => setTimeout(r, 400));
+        const link = generateShareLink(rooms, furniture, projectName, materialTier);
+        setShareLink(link);
+        navigator.clipboard.writeText(link).catch(() => {});
         markDone(id);
-        useUIStore.getState().notify('Share link ready!', 'success');
+        useUIStore.getState().notify('Share link copied to clipboard!', 'success');
       }
     } catch (err) {
       setExporting(null);

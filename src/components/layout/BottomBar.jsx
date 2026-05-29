@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Maximize2, ZoomIn, ZoomOut, Info } from 'lucide-react';
+import { ZoomIn, ZoomOut, Info, Maximize2 } from 'lucide-react';
 import useDesignStore from '../../stores/designStore';
 import useUIStore from '../../stores/uiStore';
 
 export default function BottomBar() {
   const { rooms, furniture } = useDesignStore();
-  const { activeTool, viewMode, notification } = useUIStore();
-  const [zoom, setZoom] = useState(100);
+  const { activeTool, viewMode, notification, canvasZoom, setCanvasZoom } = useUIStore();
 
   const totalArea = rooms.reduce((s, r) => s + r.width * r.length, 0);
   const sqft = Math.round(totalArea * 10.764);
@@ -59,16 +58,33 @@ export default function BottomBar() {
 
       <div className="w-px h-4 bg-border" />
 
-      {/* Zoom */}
-      <div className="flex items-center gap-1.5">
-        <button onClick={() => setZoom(z => Math.max(25, z - 25))} className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted text-slate-500 hover:text-white transition-all">
-          <ZoomOut className="w-3 h-3" />
-        </button>
-        <span className="text-[11px] text-slate-400 w-10 text-center">{zoom}%</span>
-        <button onClick={() => setZoom(z => Math.min(400, z + 25))} className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted text-slate-500 hover:text-white transition-all">
+      {/* Zoom (2D only — in 3D use scroll to zoom) */}
+      {viewMode === '2d' ? (
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setCanvasZoom?.(Math.max(0.25, (canvasZoom ?? 1) - 0.25))}
+            className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted text-slate-500 hover:text-white transition-all"
+            title="Zoom out"
+          >
+            <ZoomOut className="w-3 h-3" />
+          </button>
+          <span className="text-[11px] text-slate-400 w-10 text-center">
+            {Math.round((canvasZoom ?? 1) * 100)}%
+          </span>
+          <button
+            onClick={() => setCanvasZoom?.(Math.min(4, (canvasZoom ?? 1) + 0.25))}
+            className="w-5 h-5 flex items-center justify-center rounded hover:bg-muted text-slate-500 hover:text-white transition-all"
+            title="Zoom in"
+          >
+            <ZoomIn className="w-3 h-3" />
+          </button>
+        </div>
+      ) : (
+        <div className="text-[11px] text-slate-600 flex items-center gap-1">
           <ZoomIn className="w-3 h-3" />
-        </button>
-      </div>
+          Scroll to zoom
+        </div>
+      )}
 
       {/* Powered by */}
       <div className="text-[10px] text-slate-700 font-mono">ARCHCRAFT v1.0</div>
