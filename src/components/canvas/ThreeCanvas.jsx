@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback, Suspense, useState } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import {
-  OrbitControls, PointerLockControls, Grid, Environment,
+  OrbitControls, Grid, Environment,
   PerspectiveCamera, ContactShadows
 } from '@react-three/drei';
 import * as THREE from 'three';
@@ -25,104 +25,124 @@ function SceneRegistrar() {
   return null;
 }
 
-// ── Realistic first-person walk controls ─────────────────────────────────────
+// ── 100% manual first-person walk — no drei PointerLockControls ──────────────
+// Exposes window.__archLock() and window.__archUnlock() so the HUD overlay
+// (which sits outside the Canvas) can trigger pointer lock without dealing
+// with the drei abstraction that locks document.body instead of the canvas.
 function WalkControls({ onLockChange }) {
-  const { camera } = useThree();
-  const plcRef   = useRef();
-  const keys     = useRef({});
-  const velocity = useRef(new THREE.Vector3());
-  const bobTime  = useRef(0);
-  const isMoving = useRef(false);
+  const { camera, gl } = useThree();
+  const keysRef    = useRef({});
+  const velRef     = useRef(new THREE.Vector3());
+  const yawRef     = useRef(0);
+  const pitchRef   = useRef(0);
+  const lockedRef  = useRef(false);
+  const bobRef     = useRef(0);
+  const cbRef      = useRef(onLockChange);
+  cbRef.current    = onLockChange;
 
-  // Spawn camera inside centre of first room
+  // Spawn camera inside the first room at eye height
   useEffect(() => {
     const rooms = useDesignStore.getState().rooms;
-    if (rooms.length > 0) {
-      const r = rooms[0];
-      camera.position.set(r.x, 1.65, r.z);
-    } else {
-      camera.position.set(0, 1.65, 0);
-    }
+    const r = rooms[0];
+    camera.position.set(r?.x ?? 0, 1.65, r?.z ?? 0);
+    yawRef.current   = 0;
+    pitchRef.current = 0;
+    camera.rotation.order = 'YXZ';
     camera.rotation.set(0, 0, 0);
   }, [camera]);
 
+  // DOM pointer-lock + mouse-look setup
   useEffect(() => {
-    const down = e => { keys.current[e.code] = true; };
-    const up   = e => { keys.current[e.code] = false; };
-    window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
-    return () => {
-      window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
+    const canvas = gl.domElement;
+
+    const onPLChange = () => {
+      const locked = document.pointerLockElement === canvas;
+      lockedRef.current = locked;
+      cbRef.current(locked);
     };
-  }, []);
+
+    const onMouseMove = (e) => {
+      if (!lockedRef.current) return;
+      yawRef.current   -= e.movementX * 0.002;
+      pitchRef.current -= e.movementY * 0.002;
+      pitchRef.current  = Math.max(-1.35, Math.min(1.35, pitchRef.current));
+    };
+
+    const onKeyDown = (e) => { keysRef.current[e.code] = true; };
+    const onKeyUp   = (e) => { keysRef.current[e.code] = false; };
+
+    document.addEventListener('pointerlockchange', onPLChange);
+    document.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup',   onKeyUp);
+
+    // Global bridge so WalkHUD overlay can call requestPointerLock
+    window.__archLock   = () => { if (document.pointerLockElement !== canvas) canvas.requestPointerLock(); };
+    window.__archUnlock = () => { if (document.pointerLockElement) document.exitPointerLock(); };
+
+    return () => {
+      document.removeEventListener('pointerlockchange', onPLChange);
+      document.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup',   onKeyUp);
+      delete window.__archLock;
+      delete window.__archUnlock;
+    };
+  }, [gl]);
 
   useFrame((_, delta) => {
-    if (!plcRef.current?.isLocked) return;
+    // Always keep camera pointed where we aim
+    camera.rotation.order = 'YXZ';
+    camera.rotation.y     = yawRef.current;
+    camera.rotation.x     = pitchRef.current;
+    camera.rotation.z     = 0;
 
-    const k = keys.current;
+    if (!lockedRef.current) return;
+
+    const k      = keysRef.current;
     const sprint = k['ShiftLeft'] || k['ShiftRight'];
-    const baseSpeed = sprint ? 7.5 : 3.8;
-    const friction  = 8;
+    const speed  = sprint ? 7.5 : 3.8;
 
-    // Input direction (camera-relative)
-    const dir = new THREE.Vector3();
-    if (k['KeyW'] || k['ArrowUp'])    dir.z -= 1;
-    if (k['KeyS'] || k['ArrowDown'])  dir.z += 1;
-    if (k['KeyA'] || k['ArrowLeft'])  dir.x -= 1;
-    if (k['KeyD'] || k['ArrowRight']) dir.x += 1;
+    // Build world-space movement vector from yaw only (ignore pitch for movement)
+    const sinY = Math.sin(yawRef.current);
+    const cosY = Math.cos(yawRef.current);
+    const fwd   = new THREE.Vector3(-sinY, 0, -cosY);
+    const right = new THREE.Vector3( cosY, 0, -sinY);
 
-    const moving = dir.lengthSq() > 0;
-    isMoving.current = moving;
+    const move = new THREE.Vector3();
+    if (k['KeyW'] || k['ArrowUp'])    move.addScaledVector(fwd,    1);
+    if (k['KeyS'] || k['ArrowDown'])  move.addScaledVector(fwd,   -1);
+    if (k['KeyA'] || k['ArrowLeft'])  move.addScaledVector(right, -1);
+    if (k['KeyD'] || k['ArrowRight']) move.addScaledVector(right,  1);
 
+    const moving = move.lengthSq() > 0;
     if (moving) {
-      dir.normalize().applyEuler(camera.rotation);
-      dir.y = 0;
-      dir.normalize();
-      velocity.current.addScaledVector(dir, baseSpeed * delta * 12);
+      move.normalize();
+      velRef.current.addScaledVector(move, speed * delta * 12);
     }
 
-    // Friction / deceleration
-    velocity.current.multiplyScalar(Math.max(0, 1 - friction * delta));
+    // Friction
+    velRef.current.multiplyScalar(Math.max(0, 1 - 8 * delta));
+    if (velRef.current.length() > speed) velRef.current.setLength(speed);
 
-    // Clamp max speed
-    const maxSpeed = baseSpeed;
-    if (velocity.current.length() > maxSpeed) {
-      velocity.current.setLength(maxSpeed);
-    }
+    camera.position.x += velRef.current.x * delta;
+    camera.position.z += velRef.current.z * delta;
 
-    // Move
-    camera.position.addScaledVector(velocity.current, delta);
-
-    // Head bob — subtle, natural
+    // Head bob (Y only — no rotation-based sway, keeps it comfortable)
     if (moving) {
-      const bobFreq   = sprint ? 14 : 9;
-      const bobAmpY   = sprint ? 0.032 : 0.018;
-      const bobAmpX   = sprint ? 0.01 : 0.006;
-      bobTime.current += delta * bobFreq;
-      const eyeBase = 1.65;
-      camera.position.y = eyeBase + Math.sin(bobTime.current) * bobAmpY;
-      // Subtle side-to-side sway
-      camera.rotation.z = Math.sin(bobTime.current * 0.5) * bobAmpX;
+      bobRef.current += delta * (sprint ? 14 : 9);
+      camera.position.y = 1.65 + Math.sin(bobRef.current) * (sprint ? 0.03 : 0.016);
     } else {
-      // Settle back smoothly
       camera.position.y += (1.65 - camera.position.y) * 0.18;
-      camera.rotation.z *= 0.85;
     }
   });
 
-  return (
-    <PointerLockControls
-      ref={plcRef}
-      onLock={() => onLockChange(true)}
-      onUnlock={() => onLockChange(false)}
-    />
-  );
+  return null;
 }
 
 // ── Ground plane ──────────────────────────────────────────────────────────────
 function GroundPlane({ onClick }) {
-  const tex = new THREE.CanvasTexture((() => {
+  const tex = (() => {
     const c = document.createElement('canvas');
     c.width = c.height = 512;
     const ctx = c.getContext('2d');
@@ -134,10 +154,11 @@ function GroundPlane({ onClick }) {
       ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 512); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke();
     }
-    return c;
-  })());
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(40, 40);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(40, 40);
+    return t;
+  })();
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} onClick={onClick} receiveShadow>
@@ -147,15 +168,12 @@ function GroundPlane({ onClick }) {
   );
 }
 
-// ── Sky background ────────────────────────────────────────────────────────────
+// ── Sky dome ──────────────────────────────────────────────────────────────────
 function SkyDome() {
   return (
     <mesh>
       <sphereGeometry args={[150, 32, 32]} />
-      <meshBasicMaterial
-        color="#0a0c1a"
-        side={THREE.BackSide}
-      />
+      <meshBasicMaterial color="#0a0c1a" side={THREE.BackSide} />
     </mesh>
   );
 }
@@ -213,14 +231,14 @@ function Scene({ onWalkLockChange }) {
       )}
       {walkMode && (
         <>
-          <PerspectiveCamera makeDefault fov={78} near={0.05} far={300} />
+          <PerspectiveCamera makeDefault fov={80} near={0.05} far={300} />
           <WalkControls onLockChange={onWalkLockChange} />
         </>
       )}
 
       {/* ── Global lighting ── */}
-      <ambientLight intensity={walkMode ? 0.35 : 0.22} color="#d4e0f0" />
-      <hemisphereLight skyColor="#c8d8f0" groundColor="#302820" intensity={walkMode ? 0.4 : 0.55} />
+      <ambientLight intensity={walkMode ? 0.38 : 0.22} color="#d4e0f0" />
+      <hemisphereLight skyColor="#c8d8f0" groundColor="#302820" intensity={walkMode ? 0.42 : 0.55} />
 
       {showSolar
         ? <SunLight time={sunTime} angle={sunAngle} />
@@ -238,7 +256,7 @@ function Scene({ onWalkLockChange }) {
               shadow-bias={-0.0002}
               color="#fff8e8"
             />
-            <directionalLight position={[-12, 8, -8]} intensity={walkMode ? 0.15 : 0.3} color="#b8c8e8" />
+            <directionalLight position={[-12, 8, -8]} intensity={walkMode ? 0.18 : 0.3} color="#b8c8e8" />
           </>
       }
 
@@ -306,7 +324,7 @@ function Scene({ onWalkLockChange }) {
   );
 }
 
-// ── Walk HUD overlay ──────────────────────────────────────────────────────────
+// ── Walk HUD ─────────────────────────────────────────────────────────────────
 function WalkHUD({ locked }) {
   const { toggleWalkMode } = useUIStore();
 
@@ -315,19 +333,19 @@ function WalkHUD({ locked }) {
       <div className="absolute inset-0 pointer-events-none z-20">
         {/* Crosshair */}
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative w-6 h-6 opacity-70">
+          <div className="relative w-5 h-5 opacity-80">
             <div className="absolute top-1/2 left-0 right-0 h-px bg-white/80 -translate-y-px" />
             <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/80 -translate-x-px" />
-            <div className="absolute top-1/2 left-1/2 w-1.5 h-1.5 rounded-full border border-white/50 -translate-x-1/2 -translate-y-1/2" />
+            <div className="absolute top-1/2 left-1/2 w-1 h-1 rounded-full bg-white/60 -translate-x-1/2 -translate-y-1/2" />
           </div>
         </div>
 
-        {/* Bottom HUD bar */}
+        {/* Bottom HUD */}
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4
           bg-black/55 backdrop-blur-md border border-white/10 rounded-2xl px-6 py-2.5 text-xs text-white/70">
           <span className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Walk Mode Active
+            Walk Mode
           </span>
           <span className="w-px h-3 bg-white/20" />
           <span><kbd className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-[10px]">W A S D</kbd> Move</span>
@@ -336,61 +354,49 @@ function WalkHUD({ locked }) {
           <span><kbd className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-[10px]">ESC</kbd> Pause</span>
         </div>
 
-        {/* Speed indicator top-left */}
-        <div className="absolute top-5 left-5 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 text-[10px] text-white/50 font-mono">
-          ARCHCRAFT WALK MODE
+        <div className="absolute top-5 left-5 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 text-[10px] text-white/50 font-mono tracking-widest">
+          ARCHCRAFT · WALK
         </div>
       </div>
     );
   }
 
-  // Pre-lock splash screen
+  // Pre-lock splash — clicking ANYWHERE calls window.__archLock()
   return (
     <div
-      className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm cursor-pointer"
-      onClick={() => {
-        // Trigger pointer lock by clicking the canvas
-        const canvas = document.querySelector('canvas');
-        canvas?.requestPointerLock?.();
-      }}
+      className="absolute inset-0 z-20 flex flex-col items-center justify-center cursor-pointer select-none"
+      style={{ background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.88) 100%)' }}
+      onClick={() => window.__archLock?.()}
     >
-      {/* Vignette */}
-      <div className="absolute inset-0 pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%)' }} />
+      <div className="text-center max-w-sm px-6">
+        <div className="text-6xl mb-5 animate-bounce">🚶</div>
 
-      <div className="relative z-10 text-center max-w-sm px-6">
-        {/* Walking icon animated */}
-        <div className="text-6xl mb-6 animate-bounce">🚶</div>
-
-        <div className="text-2xl font-black text-white mb-2 tracking-tight">First-Person Walk Mode</div>
-        <div className="text-sm text-slate-400 mb-6 leading-relaxed">
-          Click to lock your mouse and walk through<br />your design as if you're really there.
+        <div className="text-2xl font-black text-white mb-2 tracking-tight">Walk Through Your Design</div>
+        <div className="text-sm text-slate-400 mb-7 leading-relaxed">
+          Click anywhere to lock your mouse and explore<br />your home in first-person.
         </div>
 
-        {/* Control cards */}
-        <div className="grid grid-cols-2 gap-2 mb-8 text-xs">
+        <div className="grid grid-cols-2 gap-2 mb-7 text-xs">
           {[
-            { key: 'W A S D', label: 'Walk' },
-            { key: 'MOUSE', label: 'Look around' },
+            { key: 'W A S D', label: 'Move' },
+            { key: 'MOUSE', label: 'Look' },
             { key: 'SHIFT', label: 'Sprint' },
-            { key: 'ESC', label: 'Pause / Exit' },
+            { key: 'ESC', label: 'Pause' },
           ].map(c => (
-            <div key={c.key} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
-              <kbd className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-white text-[10px] font-bold">{c.key}</kbd>
+            <div key={c.key} className="flex items-center gap-2 bg-white/6 border border-white/12 rounded-xl px-3 py-2.5">
+              <kbd className="font-mono bg-white/15 px-1.5 py-0.5 rounded text-white text-[10px] font-bold">{c.key}</kbd>
               <span className="text-slate-400">{c.label}</span>
             </div>
           ))}
         </div>
 
-        {/* CTA */}
-        <div className="inline-flex items-center gap-3 px-8 py-3.5 bg-white text-slate-900 font-black rounded-2xl shadow-2xl text-sm hover:bg-white/90 transition-all">
-          <span>Click anywhere to enter</span>
-          <span className="text-lg">→</span>
+        <div className="inline-flex items-center gap-3 px-8 py-3.5 bg-white text-slate-900 font-black rounded-2xl text-sm shadow-2xl">
+          Click anywhere to enter →
         </div>
 
         <button
           onClick={(e) => { e.stopPropagation(); toggleWalkMode(); }}
-          className="mt-4 block mx-auto text-xs text-slate-600 hover:text-slate-400 transition-colors pointer-events-auto underline"
+          className="mt-5 block mx-auto text-xs text-slate-600 hover:text-slate-400 transition-colors underline pointer-events-auto"
         >
           Exit walk mode
         </button>
@@ -413,7 +419,6 @@ export default function ThreeCanvas() {
           alpha: false,
           powerPreference: 'high-performance',
           preserveDrawingBuffer: true,
-          toneMappingExposure: walkMode ? 1.2 : 1.0,
         }}
         dpr={[1, 2]}
         style={{ background: '#0d0d1a' }}
